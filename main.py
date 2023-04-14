@@ -4,6 +4,9 @@ import pymongo
 from fastapi import FastAPI, HTTPException
 from bson import ObjectId, json_util
 
+
+from authentication import generate_jwt, hashed_password
+
 app = FastAPI()
 
 
@@ -19,7 +22,8 @@ def read_root():
 #         client=pymongo.MongoClient("mongodb+srv://nguyen:Nguyencony02@database.rcdfbvy.mongodb.net/?retryWrites=true&w=majority")#kết nối với pymongo
 #         db = client["basketball"]#tạo database
 #         # user = db.create_collection("members")#tạo ra 1 collection
-#         db.members.insert_one({'ten': "Nguyen", 'tuoi': 20})#tạo ra 1 document
+#         # db.members.insert_one({'ten': "Nguyen", 'tuoi': 20})#tạo ra 1 document
+#         db.create_collection("users")
 #         print("da ket noi")
 #     except:
 #         print("khong the ket noi")
@@ -101,6 +105,36 @@ def update(_id:str, name:str, birth:str, gender:bool, weight:float, height:float
       except:
           raise HTTPException(status_code=400, detail="error")
       return {"update thanh cong"}
+    
+@app.post("/register")
+def register(username:str, password:str, is_admin:bool):
+    hashedpassword = hashed_password(password)
+    try:
+        client=pymongo.MongoClient("mongodb+srv://nguyen:Nguyencony02@database.rcdfbvy.mongodb.net/?retryWrites=true&w=majority")
+        db = client["basketball"]
+        user_collection = db.users
+        check= user_collection.find_one({'username':username})
+        if check is not None:
+            raise HTTPException(status_code=400, detail="error")
+        user_collection.insert_one({
+            "username":username,
+            "hashed_password": hashedpassword,
+            "is_admin": is_admin
+        })
+        jwt_token = generate_jwt({'username':username, 'is_admin':is_admin})
+        return {"jwt_token":jwt_token}
+    except:
+        raise HTTPException(status_code=400, detail="khong the tao tai khoan")
+    
+
+    
+
+    
+
+        
+
+
+    
     
 
         
