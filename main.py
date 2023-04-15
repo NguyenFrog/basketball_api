@@ -5,7 +5,7 @@ from fastapi import FastAPI, HTTPException
 from bson import ObjectId, json_util
 
 
-from authentication import generate_jwt, hashed_password
+from authentication import generate_jwt, hashed_password, verify_password
 
 app = FastAPI()
 
@@ -126,6 +126,27 @@ def register(username:str, password:str, is_admin:bool):
     except:
         raise HTTPException(status_code=400, detail="khong the tao tai khoan")
     
+@app.post("/login")
+def login(username:str, password:str):
+    try:
+        client=pymongo.MongoClient("mongodb+srv://nguyen:Nguyencony02@database.rcdfbvy.mongodb.net/?retryWrites=true&w=majority")
+        db = client["basketball"]
+        user_collection = db.users
+        check = user_collection.find_one({'username':username})
+        if check is None:
+            raise HTTPException(status_code=400, detail= "tai khoan khong ton tai")
+        hashed_password = check['hashed_password']
+        temp = password[::-1]
+        check_login = verify_password(password + temp, hashed_password)
+        if check_login is False:
+            raise HTTPException(status_code=400, detail="sai mat khau")
+        jwt_token = generate_jwt({'username':username, 'is_admin':check['is_admin']})
+        return {"phan hoi":"dang nhap thanh cong", "jwt_token":jwt_token}
+    except:
+        raise HTTPException(status_code=400, detail="login error")
+        
+
+        
 
     
 
