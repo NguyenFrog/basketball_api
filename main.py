@@ -1,11 +1,14 @@
 import json
 from typing import Union
 import pymongo
-from fastapi import FastAPI, HTTPException
+from fastapi import Depends, FastAPI, HTTPException, status
 from bson import ObjectId, json_util
+from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm
 
 
-from authentication import generate_jwt, hashed_password, verify_password
+
+from authentication import authenticate_user, generate_jwt, hashed_password, verify_password, verify_user
+
 
 app = FastAPI()
 
@@ -73,7 +76,7 @@ def get_one(name:str):
 #         raise HTTPException(status_code=400, detail="sai thong tin")
 
 @app.delete("/delete")
-def delete(name:str):
+def delete(name:str, is_admin = Depends(authenticate_user)):
     try: 
         client=pymongo.MongoClient("mongodb+srv://nguyen:Nguyencony02@database.rcdfbvy.mongodb.net/?retryWrites=true&w=majority")
         db = client["basketball"]
@@ -105,7 +108,8 @@ def update(_id:str, name:str, birth:str, gender:bool, weight:float, height:float
       except:
           raise HTTPException(status_code=400, detail="error")
       return {"update thanh cong"}
-    
+
+
 @app.post("/register")
 def register(username:str, password:str, is_admin:bool):
     hashedpassword = hashed_password(password)
@@ -115,7 +119,7 @@ def register(username:str, password:str, is_admin:bool):
         user_collection = db.users
         check= user_collection.find_one({'username':username})
         if check is not None:
-            raise HTTPException(status_code=400, detail="error")
+            raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="tai khoan da ton tai")
         user_collection.insert_one({
             "username":username,
             "hashed_password": hashedpassword,
@@ -125,6 +129,7 @@ def register(username:str, password:str, is_admin:bool):
         return {"jwt_token":jwt_token}
     except:
         raise HTTPException(status_code=400, detail="khong the tao tai khoan")
+
     
 @app.post("/login")
 def login(username:str, password:str):
@@ -144,6 +149,18 @@ def login(username:str, password:str):
         return {"phan hoi":"dang nhap thanh cong", "jwt_token":jwt_token}
     except:
         raise HTTPException(status_code=400, detail="login error")
+
+
+@app.post("/token")
+def token(data:  OAuth2PasswordRequestForm = Depends()):
+    user = verify_user(data.username, data.password)
+    if user is None:
+        raise HTTPException(
+            status_code=400, detail="Wrong username or password")
+    jwt_token = generate_jwt({"username": user.username, "is_admin": user.is_admin})
+    return {"message": "login success", "access_token": jwt_token}
+
+
         
 
         
