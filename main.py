@@ -4,11 +4,10 @@ import pymongo
 from fastapi import Depends, FastAPI, HTTPException, status
 from bson import ObjectId, json_util
 from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm
-
-
-
-from authentication import authenticate_user, generate_jwt, hashed_password, verify_password, verify_user
-
+from authentication import authenticate_user, verify_password, generate_access_token, generate_password_hash
+from user_model import User
+client=pymongo.MongoClient("mongodb+srv://nguyen:Nguyencony02@database.rcdfbvy.mongodb.net/?retryWrites=true&w=majority")# kết nối với pymongo
+db = client["basketball"] # tạo database
 
 app = FastAPI()
 
@@ -22,8 +21,6 @@ def read_root():
 # @app.on_event("startup")
 # def tao_database():
 #     try:
-#         client=pymongo.MongoClient("mongodb+srv://nguyen:Nguyencony02@database.rcdfbvy.mongodb.net/?retryWrites=true&w=majority")#kết nối với pymongo
-#         db = client["basketball"]#tạo database
 #         # user = db.create_collection("members")#tạo ra 1 collection
 #         # db.members.insert_one({'ten': "Nguyen", 'tuoi': 20})#tạo ra 1 document
 #         db.create_collection("users")
@@ -34,8 +31,6 @@ def read_root():
 @app.post("/add")
 def add_new_user(name:str, birth:str, gender:bool, weight:float, height:float, level:str):
     try:
-        client=pymongo.MongoClient("mongodb+srv://nguyen:Nguyencony02@database.rcdfbvy.mongodb.net/?retryWrites=true&w=majority")
-        db = client["basketball"]
         db.members.insert_one({'name': name, 'birth': birth, 'gender': gender, 'weight': weight, 'height': height, 'level':level})
     except:
         raise HTTPException(status_code=400, detail="error")
@@ -44,8 +39,6 @@ def add_new_user(name:str, birth:str, gender:bool, weight:float, height:float, l
 @app.get("/get_one")
 def get_one(name:str):
     try:
-        client=pymongo.MongoClient("mongodb+srv://nguyen:Nguyencony02@database.rcdfbvy.mongodb.net/?retryWrites=true&w=majority")
-        db = client["basketball"]
         user = db.members.find_one({'name':name})
         if user is None:
             raise HTTPException(status_code=400, detail="khong tim thay ten")
@@ -64,8 +57,6 @@ def get_one(name:str):
 # @app.get("/get_many")
 # def get_many(name:str, gender:bool, birth:str):
 #     try:
-#         client=pymongo.MongoClient("mongodb+srv://nguyen:Nguyencony02@database.rcdfbvy.mongodb.net/?retryWrites=true&w=majority")
-#         db = client["basketball"]
 #         users = db.members.find({'name':name, 'gender':gender, 'birth':birth})
 #         if users is None:
 #           raise HTTPException(status_code=400, detail="khong tim thay thong tin")
@@ -77,9 +68,9 @@ def get_one(name:str):
 
 @app.delete("/delete")
 def delete(name:str, is_admin = Depends(authenticate_user)):
+    if is_admin is False:
+        raise HTTPException(status_code=403, detail = "Forbidden")
     try: 
-        client=pymongo.MongoClient("mongodb+srv://nguyen:Nguyencony02@database.rcdfbvy.mongodb.net/?retryWrites=true&w=majority")
-        db = client["basketball"]
         user = db.members.find_one({'name':name})
         if user is None:
             raise HTTPException(status_code=400, detail="khong tim thay ten")
@@ -91,8 +82,6 @@ def delete(name:str, is_admin = Depends(authenticate_user)):
 @app.get("/get_all")
 def get_all():
     try:
-        client=pymongo.MongoClient("mongodb+srv://nguyen:Nguyencony02@database.rcdfbvy.mongodb.net/?retryWrites=true&w=majority")
-        db = client["basketball"]
         users=db.members.find({})
     except:
         raise HTTPException(status_code=400, detail="error")
@@ -100,10 +89,8 @@ def get_all():
     return res 
     
 @app.put("/update")
-def update(_id:str, name:str, birth:str, gender:bool, weight:float, height:float, level:str):
+def update(_id:str, name:str, birth:str, gender:bool, weight:float, height:float, level:str, is_admin = Depends(authenticate_user)):
       try:
-        client=pymongo.MongoClient("mongodb+srv://nguyen:Nguyencony02@database.rcdfbvy.mongodb.net/?retryWrites=true&w=majority")
-        db = client["basketball"]
         db.members.update_one({'_id':ObjectId(_id)}, {'$set':{'name': name, 'birth': birth, 'gender': gender, 'weight': weight, 'height': height, 'level':level}})       
       except:
           raise HTTPException(status_code=400, detail="error")
@@ -112,20 +99,19 @@ def update(_id:str, name:str, birth:str, gender:bool, weight:float, height:float
 
 @app.post("/register")
 def register(username:str, password:str, is_admin:bool):
-    hashedpassword = hashed_password(password)
     try:
-        client=pymongo.MongoClient("mongodb+srv://nguyen:Nguyencony02@database.rcdfbvy.mongodb.net/?retryWrites=true&w=majority")
-        db = client["basketball"]
         user_collection = db.users
         check= user_collection.find_one({'username':username})
         if check is not None:
             raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="tai khoan da ton tai")
+        hashedpassword = generate_password_hash(password + password[::-1])
+        print(hashedpassword)
         user_collection.insert_one({
             "username":username,
             "hashed_password": hashedpassword,
             "is_admin": is_admin
         })
-        jwt_token = generate_jwt({'username':username, 'is_admin':is_admin})
+        jwt_token = generate_access_token({'username':username, 'is_admin':is_admin})
         return {"jwt_token":jwt_token}
     except:
         raise HTTPException(status_code=400, detail="khong the tao tai khoan")
@@ -134,8 +120,6 @@ def register(username:str, password:str, is_admin:bool):
 @app.post("/login")
 def login(username:str, password:str):
     try:
-        client=pymongo.MongoClient("mongodb+srv://nguyen:Nguyencony02@database.rcdfbvy.mongodb.net/?retryWrites=true&w=majority")
-        db = client["basketball"]
         user_collection = db.users
         check = user_collection.find_one({'username':username})
         if check is None:
@@ -145,21 +129,28 @@ def login(username:str, password:str):
         check_login = verify_password(password + temp, hashed_password)
         if check_login is False:
             raise HTTPException(status_code=400, detail="sai mat khau")
-        jwt_token = generate_jwt({'username':username, 'is_admin':check['is_admin']})
+        jwt_token = generate_access_token({'username':username, 'is_admin':check['is_admin']})
         return {"phan hoi":"dang nhap thanh cong", "jwt_token":jwt_token}
     except:
         raise HTTPException(status_code=400, detail="login error")
 
 
 @app.post("/token")
-def token(data:  OAuth2PasswordRequestForm = Depends()):
-    user = verify_user(data.username, data.password)
-    if user is None:
-        raise HTTPException(
-            status_code=400, detail="Wrong username or password")
-    jwt_token = generate_jwt({"username": user.username, "is_admin": user.is_admin})
+def token(dataform:  OAuth2PasswordRequestForm = Depends()):
+    try:
+        user_collection = db.users
+        response = user_collection.find_one({"username": dataform.username})
+        if response is None:
+           raise HTTPException(status_code=401, detail="Username or password is incorrect")
+        if not verify_password(dataform.password + dataform.password[::-1], response['hashed_password']):
+            raise HTTPException(status_code=401, detail="Username or password is incorrect")
+        data = response.copy()
+        data['_id'] = str(data['_id'])
+        user = User(**data)
+        jwt_token = generate_access_token({"username": user.username, "is_admin": user.is_admin})
+    except:
+         raise HTTPException(status_code=400, detail="Wrong username or password")
     return {"message": "login success", "access_token": jwt_token}
-
 
         
 

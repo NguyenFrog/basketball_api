@@ -4,27 +4,30 @@ from jose import jwt
 from passlib.context import CryptContext
 from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm
 import pymongo
-
 from user_model import User
-password_object = CryptContext(schemes=["bcrypt"],default='bcrypt')
+client=pymongo.MongoClient("mongodb+srv://nguyen:Nguyencony02@database.rcdfbvy.mongodb.net/?retryWrites=true&w=majority")# kết nối với pymongo
+db = client["basketball"] # tạo database
+
+password_object = CryptContext(schemes=["bcrypt"],default="bcrypt")
 auth = OAuth2PasswordBearer(tokenUrl="token")
-client = pymongo.MongoClient( "mongodb+srv://tuanpluss02:Tuan2002@stormx.kretsz3.mongodb.net/?retryWrites=true&w=majority")  # ket noi den mongoDB
-db = client['Basketball']
 
 
-def hashed_password(password:str):
-    temp = password[::-1]
-    return password_object.hash(password+temp)
+def generate_password_hash(password):
+    return password_object.hash(password)
 
-def verify_password(password:str, hashed_password:str):
-    password_object.verify(password, hashed_password)
 
-def generate_jwt(data: dict):
-    payload = data.copy()
-    expire = datetime.datetime.utcnow() + datetime.timedelta(minutes = 60*24)
-    payload.update({"exp": expire})
-    encoded_jwt = jwt.encode(payload, 'kjashuenfuehfewis34', algorithm='HS256')
+def verify_password(plain_password, hashed_password):
+    return password_object.verify(plain_password, hashed_password)
+
+
+def generate_access_token(data: dict):
+    to_encode = data.copy()
+    expire = datetime.datetime.utcnow() + datetime.timedelta(minutes=15)
+    to_encode.update({"exp": expire})
+    encoded_jwt = jwt.encode(
+        to_encode, 'asfdsfgdsfasfweqweweq213123sad21edf23edaaqw21w', algorithm='HS256')
     return encoded_jwt
+
 
 def authenticate_user(token: str = Depends(auth)):
     if token is None:
@@ -51,7 +54,8 @@ def get_user_from_mongo(username: str):
     data['_id'] = str(data['_id'])
     user = User(**data)
     return user
-    
+
+
 def verify_user(username: str, password: str) -> User:
     user_collection = db.users
     response = user_collection.find_one({"username": username})
@@ -62,13 +66,11 @@ def verify_user(username: str, password: str) -> User:
     data = response.copy()
     data['_id'] = str(data['_id'])
     user = User(**data)
-    print(user)
     if not verify_password(password + password[::-1], user.hashed_password):
         raise HTTPException(
             status_code=401, detail="Username or password is incorrect")
     return user
 
-    
 
 
     
