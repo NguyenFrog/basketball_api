@@ -1,2 +1,3 @@
 import pymongo 
-data=pymongo.MongoClient("mongodb+srv://nguyen:Nguyencony02@database.rcdfbvy.mongodb.net/?retryWrites=true&w=majority")
+from config import MONGO_URL
+data=pymongo.MongoClient(MONGO_URL)
